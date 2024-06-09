@@ -3,10 +3,10 @@ from langchain_core.tools import tool
 from langchain_cohere import CohereEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_community.document_loaders import PyPDFLoader
-from utils import simplify_string, find_article_pubmed, get_article_pdf, smiles_to_feature_vector
+from takehome.utils import simplify_string, find_article_pubmed, get_article_pdf, smiles_to_feature_vector
 import requests
 from pickle import load
-from train_model import get_config
+from takehome.train_model import get_config
 import time
 
 @tool

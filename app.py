@@ -5,7 +5,7 @@ from langchain.agents import AgentExecutor
 from langchain_cohere.react_multi_hop.agent import create_cohere_react_agent
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.memory import ChatMessageHistory
-from tools import query_vector_db_articles, get_smiles_from_pubchem, predict_energy_from_smiles
+from takehome.tools import query_vector_db_articles, get_smiles_from_pubchem, predict_energy_from_smiles
 
 import chainlit as cl
 
