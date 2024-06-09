@@ -1,0 +1,24 @@
+name: takehome_valence
+channels:
+  - defaults
+dependencies:
+  - python=3.12.3
+  - pip
+
+  - pip:
+    - chainlit==1.1.300rc4
+    - datamol
+    - fuzzywuzzy
+    - ipykernel
+    - langchain
+    - langchain-cohere
+    - langchain-community
+    - langchain-core
+    - langchain-pinecone
+    - levenshtein
+    - lightgbm
+    - pinecone
+    - rdkit
+    - scikit-learn
+    - pymed
+    
