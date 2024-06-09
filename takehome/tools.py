@@ -5,6 +5,8 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_community.document_loaders import PyPDFLoader
 from takehome.utils import simplify_string, find_article_pubmed, get_article_pdf, smiles_to_feature_vector
 import requests
+from pinecone import Pinecone,ServerlessSpec
+
 from pickle import load
 from takehome.train_model import get_config
 import time
@@ -33,6 +35,22 @@ def query_vector_db_articles(query: str, metadata: dict) -> list:
     embeddings_model = CohereEmbeddings(
         cohere_api_key=os.getenv("COHERE_API_KEY"), model="embed-multilingual-v3.0"
     )
+    pc = Pinecone()
+
+    index_name = "pubmed"
+    if index_name not in pc.list_indexes().names():
+        print("pubmed index not found, creating a new one...")
+        # Do something, such as create the index
+        pc.create_index(
+            name=index_name,
+            dimension=1024,
+            metric='cosine',
+            spec=ServerlessSpec(
+            cloud="aws",
+            region="us-east-1"
+            )
+        )
+    
     vectorstore = PineconeVectorStore(index_name="pubmed", embedding=embeddings_model)
 
     original_title = metadata["title"]

@@ -4,6 +4,11 @@ I wanted to show what I could do, so I went overboard with the project. I implem
 - The LangChain agent is deployed as a chat interface using chainlit.
 
 
+
+
+![User Interface](public/interface.png)
+
+
 Other than that, the project uses:
 - Cohere Command-R-Plus as the agent
 - Pinecone as the vectorstore and similarity search engine

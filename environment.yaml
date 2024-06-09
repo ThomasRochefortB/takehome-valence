@@ -21,4 +21,5 @@ dependencies:
     - rdkit
     - scikit-learn
     - pymed
+    - pypdf
     
