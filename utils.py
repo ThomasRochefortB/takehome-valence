@@ -4,6 +4,10 @@ import requests
 import re
 from nltk.corpus import stopwords
 import os
+from rdkit import Chem
+from rdkit.Chem import Descriptors
+import numpy as np
+
 
 def find_article_pubmed(title: str):
     """
@@ -114,3 +118,46 @@ def simplify_string(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
 
     return text
+
+# Function to convert SMILES to feature vector
+def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
+    # Convert SMILES to Morgan fingerprint
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is not None:
+        fingerprint = Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=3, nBits=2048)
+        fingerprint_array = np.array(fingerprint)
+    else:
+        fingerprint_array = np.zeros(2048)
+
+    # Collect molecular descriptors if required
+    if config['use_descriptors']:
+        descriptor_names = [name for name, _ in Descriptors.descList]
+        descriptors = {}
+        for name in descriptor_names:
+            if mol is not None:
+                descriptors[name] = getattr(Descriptors, name)(mol)
+            else:
+                descriptors[name] = 0  # Or you could choose another default value
+        descriptors_array = np.array([descriptors[name] for name in descriptor_names])
+    else:
+        descriptors_array = np.array([])
+
+    # Combine fingerprints and descriptors if both are used
+    if config['use_morgan'] and config['use_descriptors']:
+        feature_vector = np.concatenate((fingerprint_array, descriptors_array))
+    elif config['use_morgan']:
+        feature_vector = fingerprint_array
+    elif config['use_descriptors']:
+        feature_vector = descriptors_array
+    else:
+        raise ValueError("No features selected. Please include at least Morgan fingerprints or descriptors.")
+
+    # Scale the feature vector
+    feature_vector = scaler.transform([feature_vector])[0]
+
+    # Apply feature selection if indices are provided
+    if feature_indices is not None:
+        feature_vector = feature_vector[feature_indices]
+
+    return feature_vector
+
