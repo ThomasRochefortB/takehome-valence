@@ -54,7 +54,7 @@ def query_vector_db_articles(query: str, metadata: dict) -> list:
                 pages, embedding=embeddings_model, index_name="pubmed"
             )
             print("Article successfully added to the vector database.")
-            print("Waiting for the database to update...")
+            print("Waiting for the vectorstore to update...")
             MAX_RETRIES = 5  # Define the maximum number of retries
 
             query_results = []

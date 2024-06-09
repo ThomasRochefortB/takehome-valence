@@ -2,7 +2,6 @@ from pymed import PubMed
 from fuzzywuzzy import fuzz
 import requests
 import re
-from nltk.corpus import stopwords
 import os
 from rdkit import Chem
 from rdkit.Chem import Descriptors
@@ -100,7 +99,7 @@ def get_article_pdf(article):
 def simplify_string(text: str) -> str:
     """
     Simplifies a given string by converting it to lowercase, removing punctuation,
-    removing stop words, and removing extra whitespace.
+     and removing extra whitespace.
 
     Args:
         text (str): The input string to be simplified.
@@ -111,9 +110,6 @@ def simplify_string(text: str) -> str:
     text = text.lower()
 
     text = re.sub(r"[^\w\s]", "", text)
-    stop_words = set(stopwords.words("english"))
-
-    text = " ".join([word for word in text.split() if word not in stop_words])
 
     text = re.sub(r"\s+", " ", text).strip()
 
