@@ -23,6 +23,17 @@ from safe.tokenizer import SAFETokenizer
 
 
 def download_file(url, output_path):
+    """
+    Downloads a file from the given URL and saves it to the specified output path.
+
+    Args:
+        url (str): The URL of the file to download.
+        output_path (str): The path where the downloaded file should be saved.
+
+    Raises:
+        requests.HTTPError: If the download request fails.
+
+    """
     response = requests.get(url)
     response.raise_for_status()
     with open(output_path, "wb") as f:
@@ -30,6 +41,15 @@ def download_file(url, output_path):
 
 
 def check_and_download_tokenizer(tokenizer_path):
+    """
+    Checks if the tokenizer file exists at the specified path. If not, downloads the tokenizer file and its configuration file.
+
+    Args:
+        tokenizer_path (str): The path to the tokenizer file.
+
+    Returns:
+        None
+    """
     tokenizer_url = (
         "https://huggingface.co/datamol-io/safe-gpt/resolve/main/tokenizer.json"
     )
@@ -47,6 +67,15 @@ def check_and_download_tokenizer(tokenizer_path):
 
 
 def setup_safe_tokenizer(tokenizer_path):
+    """
+    Set up a safe tokenizer by checking and downloading the tokenizer if necessary.
+
+    Parameters:
+    tokenizer_path (str): The path to the tokenizer file.
+
+    Returns:
+    tokenizer: The safe tokenizer object.
+    """
     check_and_download_tokenizer(tokenizer_path)
     tokenizer = SAFETokenizer().load(tokenizer_path)
     tokenizer = tokenizer.get_pretrained()
@@ -55,6 +84,18 @@ def setup_safe_tokenizer(tokenizer_path):
 
 # Convert SMILES to Fingerprints using RDKit
 def smiles_to_fingerprint(smiles):
+    """
+    Convert a SMILES string to a molecular fingerprint.
+
+    Parameters:
+    smiles (str): The SMILES string representing the molecule.
+
+    Returns:
+    numpy.ndarray: The molecular fingerprint as a numpy array.
+
+    If the SMILES string is invalid and cannot be converted to a molecule,
+    a zero vector of length 2048 will be returned.
+    """
     mol = Chem.MolFromSmiles(smiles)
     if mol is not None:
         fp = Chem.AllChem.GetMorganFingerprintAsBitVect(mol, radius=3, nBits=2048)
@@ -65,31 +106,37 @@ def smiles_to_fingerprint(smiles):
 
 # Function to generate token embeddings from SMILES using Hugging Face model
 def generate_smiles_embedding(smiles, where="tokenemb"):
+    """
+    Generates embeddings for a given SMILES string using the SAFETokenizer and a pre-trained model.
+
+    Args:
+        smiles (str): The SMILES string to generate embeddings for.
+        where (str, optional): Specifies where to extract the embeddings from.
+            Possible values are "tokenemb" (default) or any other value to extract from the last hidden state.
+
+    Returns:
+        numpy.ndarray: The generated embeddings for the SMILES string.
+
+    """
     # Check for GPU availability
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     # Load the SAFETokenizer
     tokenizer_path = (
         "/home/thomas/Documents/scratch_thomas/GitHub/takehome-valence/tokenizer.json"
     )
     safe_tokenizer = setup_safe_tokenizer(tokenizer_path)
-
     # Load the model and move it to the appropriate device
     hf_model = AutoModel.from_pretrained("datamol-io/safe-gpt")
     hf_model.to(device)
     hf_model.eval()
-
     try:
         # Attempt to encode the SMILES string
         safe_str = safe.encode(smiles, slicer="mmpa")
     except Exception as e:
         print(f"Encoding failed for SMILES: {smiles} Error: {e}")
         # Use the tokenizer's end-of-sequence token as the fallback string
-        safe_str = (
-            safe_tokenizer.eos_token
-        )  # This should be the EOS token from the tokenizer
+        safe_str = safe_tokenizer.eos_token
 
-    # Encode the SMILES or the fallback string using the tokenizer
     tokens = safe_tokenizer.encode(safe_str)
     tokens_tensor = torch.tensor([tokens]).to(
         device
@@ -99,20 +146,16 @@ def generate_smiles_embedding(smiles, where="tokenemb"):
     if where == "tokenemb":
         # Extract the word token embeddings (wte) and positional embeddings (wpe)
         with torch.no_grad():
-            # Access the transformer component of the model
-            transformer = hf_model
             # Get the word token embeddings
-            word_token_embeddings = transformer.wte(tokens_tensor)
+            word_token_embeddings = hf_model.wte(tokens_tensor)
             # Get the positional embeddings
-            positional_embeddings = transformer.wpe(
+            positional_embeddings = hf_model.wpe(
                 torch.arange(tokens_tensor.size(1), device=device).unsqueeze(0)
             )
             # Add the word token embeddings and positional embeddings
             combined_embeddings = word_token_embeddings + positional_embeddings
         # Move embeddings to CPU and convert to NumPy arrays
-        combined_embeddings = (
-            combined_embeddings.mean(dim=1).squeeze().cpu().numpy()
-        )  # (sequence_length, embedding_size)
+        combined_embeddings = combined_embeddings.mean(dim=1).squeeze().cpu().numpy()
         return combined_embeddings
     else:
         with torch.no_grad():
@@ -124,6 +167,12 @@ def generate_smiles_embedding(smiles, where="tokenemb"):
 
 
 def get_config():
+    """
+    Function to define the model configuration.
+
+    Returns:
+        dict: A dictionary containing the model configuration parameters.
+    """
     config = {
         "use_morgan": False,
         "use_descriptors": True,
@@ -148,12 +197,31 @@ def get_config():
     return config
 
 
-# Helper functions to generate features
 def generate_morgan_features(df):
+    """
+    Generate Morgan fingerprint features for a given DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The DataFrame containing the 'smiles' column.
+
+    Returns:
+    list: A list of Morgan fingerprint features.
+
+    """
     return df["smiles"].apply(smiles_to_fingerprint).tolist()
 
 
 def generate_rdkit_descriptors(df):
+    """
+    Generate RDKit descriptors for a given DataFrame.
+
+    Parameters:
+    df (pandas.DataFrame): The DataFrame containing the 'smiles' column.
+
+    Returns:
+    numpy.ndarray: A numpy array containing the RDKit descriptors for each molecule.
+    """
+
     descriptor_names = [name for name, _ in Descriptors.descList]
     descriptors_list = []
     for smiles in df["smiles"]:
@@ -167,6 +235,15 @@ def generate_rdkit_descriptors(df):
 
 
 def generate_padel_descriptors(df):
+    """
+    Generate PaDEL descriptors for a given DataFrame of SMILES strings.
+
+    Parameters:
+    df (pandas.DataFrame): DataFrame containing a column named "smiles" with SMILES strings.
+
+    Returns:
+    numpy.ndarray: Array of PaDEL descriptors generated from the SMILES strings.
+    """
     padel_descriptors_list = []
     for smiles in tqdm(df["smiles"], desc="Generating PaDEL descriptors"):
         padel_descriptors = from_smiles(smiles, threads=-1)
@@ -180,13 +257,32 @@ def generate_padel_descriptors(df):
 
 
 def generate_hf_embeddings(df):
+    """
+    Generate embeddings for the given DataFrame using the `generate_smiles_embedding` function.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame containing the "smiles" column.
+
+    Returns:
+        numpy.ndarray: An array of embeddings generated for each SMILES string in the DataFrame.
+    """
     embeddings_list = [generate_smiles_embedding(smiles) for smiles in df["smiles"]]
     return np.array(embeddings_list)
 
 
-# Simplified get_dataset function with feature check
 def get_dataset(config):
-    df = dm.data.freesolv()  # Replace with your data loading method
+    """
+    Generate the dataset based on the provided configuration.
+
+    Args:
+        config (dict): A dictionary containing the configuration options.
+
+    Returns:
+        X (numpy.ndarray): The input features of the dataset.
+        y (numpy.ndarray): The target values of the dataset.
+    """
+
+    df = dm.data.freesolv()
     features = []
 
     # Generate and collect features based on configuration
@@ -216,6 +312,7 @@ def get_dataset(config):
     y = df["expt"].values
 
     # Check for features that are highly correlated with the target
+    # This is just for me since I do not understand all the RDKit descriptors
     if X.size > 0:
         df_features = pd.DataFrame(X)
         df_features["target"] = y
@@ -241,6 +338,20 @@ def get_dataset(config):
 
 # Feature selection function
 def select_features(X, y, num_top_features, random_state):
+    """
+    Selects the top features from the given dataset using a random forest regressor.
+
+    Parameters:
+    X (array-like): The input features.
+    y (array-like): The target variable.
+    num_top_features (int): The number of top features to select.
+    random_state (int): The random seed for reproducibility.
+
+    Returns:
+    X_selected (array-like): The selected top features from the input dataset.
+    top_feature_indices (array-like): The indices of the top features in the original dataset.
+    """
+
     model = RandomForestRegressor(
         n_estimators=100, max_depth=10, random_state=random_state
     )
@@ -252,6 +363,18 @@ def select_features(X, y, num_top_features, random_state):
 
 # Helper function to log cross-validation results
 def log_cv_results(log_file, cv_results, metric_name):
+    """
+    Logs cross-validation results to a file.
+
+    Parameters:
+        log_file (file): The file object to write the results to.
+        cv_results (dict): The cross-validation results.
+        metric_name (str): The name of the metric to log.
+
+    Returns:
+        None
+    """
+
     scores = -cv_results[f"test_{metric_name}"]
     train_scores = -cv_results[f"train_{metric_name}"]
 
@@ -267,6 +390,21 @@ def log_cv_results(log_file, cv_results, metric_name):
 
 # Function to train and evaluate a model and log the results
 def train_and_evaluate_model(X, y, config, model, model_name, log_file):
+    """
+    Trains and evaluates a machine learning model using k-fold cross-validation.
+
+    Args:
+        X (array-like): The input features.
+        y (array-like): The target variable.
+        config (dict): Configuration parameters for training and evaluation.
+        model: The machine learning model to train and evaluate.
+        model_name (str): The name of the model.
+        log_file: The file object to write the log messages.
+
+    Returns:
+        tuple: A tuple containing the trained model, mean test RMSE, and feature indices (if feature selection is used).
+    """
+
     log_file.write(f"\nTesting {model_name}:\n")
     log_file.write("-" * 30 + "\n")
     print(f"Training and evaluating {model_name}...")
