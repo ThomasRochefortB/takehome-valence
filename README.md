@@ -1,6 +1,7 @@
 # takehome-valence
 I wanted to show what I could do, so I went overboard with the project. I implemented a few extra features that I thought would be useful:
 - I thought it was boring to retrieve from a static pdf file... so I integrated the PubMed API to chat with any OpenAccess article.
+- The Assistant supports message history.
 - I integrated SAFE-GPT as a tool for de novo molecule generation.
 - The LangChain agent is deployed as a chat interface using chainlit.
 
@@ -64,7 +65,7 @@ https://pubs.acs.org/doi/10.1021/acs.jpclett.2c03858?goto=supporting-info
 2. I then tried combining different feature sets to see if I could get a better performance than the rdkit's descriptors:
 <center>
 
-|               **Feature set**              | **10-fold CV RMSE ** | **10-fold CV MAE** |
+|               **Feature set**              | **10-fold CV RMSE** | **10-fold CV MAE** |
 |:------------------------------------------:|:--------------------:|:------------------:|
 |  Morgan Fingerprint+  RDKit's descriptors  |        1.0912        |       0.6239       |
 | SAFE-GPT's token+pos + RDKit's descriptors |        1.1923        |       0.7076       |
@@ -74,7 +75,7 @@ https://pubs.acs.org/doi/10.1021/acs.jpclett.2c03858?goto=supporting-info
 3. I couldn't do better than the RKDit's descriptors, so I went with it and since I did not understand all of the features, I added a correlation check with the prediction labels to make sure I did not contaminate the features with the labels. I did a bit of parameter tuning to train a bunch of regressors from sklearn. I combined them using a stacking regressor with a ridge regressor at the final output:
 <center>
 
-|          **Model**          | **10-fold CV RMSE ** | **10-fold CV MAE** |
+|          **Model**          | **10-fold CV RMSE** | **10-fold CV MAE** |
 |:---------------------------:|:--------------------:|:------------------:|
 |             SVR             |        0.8359        |     **0.4853**     |
 |              RF             |        1.1470        |       0.6764       |
