@@ -7,10 +7,12 @@ from takehome.utils import simplify_string, find_article_pubmed, get_article_pdf
 import requests
 from pinecone import Pinecone,ServerlessSpec
 import safe as sf
-
 from pickle import load
 from takehome.train_model import get_config
 import time
+from safe.tokenizer import SAFETokenizer
+from safe.trainer.model import SAFEDoubleHeadsModel
+import torch
 
 @tool
 def query_vector_db_articles(query: str, metadata: dict) -> list:
@@ -169,17 +171,24 @@ def predict_energy_from_smiles(smiles: str) -> float:
     return prediction
 
 @tool
-def gen_denovo_molecules(n_desired_molecules:int=10)-> list[str]:
+def gen_denovo_molecules(n_desired_molecules:int=1)-> list[str]:
     """
     Generate de novo molecules using SAFEDesign.
 
     Parameters:
-    - n_desired_molecules (int): The number of desired molecules to generate. Default is 10.
+    - n_desired_molecules (int): The number of desired molecules to generate. Default is 1.
 
     Returns:
     - list[str]: A list of generated SMILES strings representing the molecules.
     """
-    n_trials=n_desired_molecules*2
-    designer = sf.SAFEDesign.load_default(verbose=True)
-    generated_smiles = designer.de_novo_generation(sanitize=True, n_samples_per_trial=n_trials)
-    return generated_smiles[:n_desired_molecules]
+    if torch.cuda.is_available():
+        model = SAFEDoubleHeadsModel.from_pretrained("datamol-io/safe-gpt",low_cpu_mem_usage=True,device_map="cpu")
+        tokenizer = SAFETokenizer.from_pretrained("datamol-io/safe-gpt")
+        designer = sf.SAFEDesign(model=model, tokenizer=tokenizer)
+
+        n_trials=n_desired_molecules*2
+        generated_smiles = designer.de_novo_generation(sanitize=True, n_samples_per_trial=n_trials)
+        return generated_smiles[:n_desired_molecules]
+    else:
+        print("CUDA not available, tool is not supported on the device.")
+        return "CUDA not available, tool is not supported on the device."

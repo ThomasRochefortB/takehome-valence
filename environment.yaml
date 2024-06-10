@@ -20,6 +20,7 @@ dependencies:
     - pinecone
     - rdkit
     - scikit-learn
+    - pandas==2.1
     - pymed
     - pypdf
     - python-Levenshtein
