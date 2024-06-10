@@ -33,7 +33,7 @@ async def set_starters():
 
 @cl.on_chat_start
 async def on_chat_start():
-    model = ChatCohere(streaming=True)
+    model = ChatCohere(model="command-r-plus",temperature=0.0,max_tokens=4096,streaming=True)
     prompt = ChatPromptTemplate.from_template("{input}")
     preamble = """
     You are an expert who answers the user's question with the most relevant datasource.
