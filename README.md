@@ -44,9 +44,11 @@ chainlit run app.py
 ## Hydration free energy prediction model:
 * I managed to reach a 10-fold MAE that beats SOTA results from my very short lit. review and that is also under the experimental uncertainty of the freesolv dataset (+/-0.5674 kcal/mol)
 
-* The stacking model shows a 10 fold MAE of 0.4935 which is better than the reported results in:
-https://pubs.aip.org/aip/jcp/article/154/13/134113/1065546
-https://pubs.acs.org/doi/10.1021/acs.jpclett.2c03858?goto=supporting-info
+* The stacking model shows a 10 fold MAE of 0.4935 which is better than the reported results in: 
+
+[Machine learning of free energies in chemical compound space using ensemble representations: Reaching experimental uncertainty for solvation](https://pubs.aip.org/aip/jcp/article/154/13/134113/1065546) -> MAE: 0.51kcal/mol
+
+[Machine Learning Prediction of Hydration Free Energy with Physically Inspired Descriptors](https://pubs.acs.org/doi/10.1021/acs.jpclett.2c03858?goto=supporting-info) -> RMSE: 0.8 , MAE: 0.5kcal/mol
 
 
 ### Process:
