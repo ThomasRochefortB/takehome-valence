@@ -58,7 +58,7 @@ chainlit run app.py
 1. I started with simple LGBM model (with default hyperparameters) to test different feature sets. 
 <center>
 
-|           Feature set           | **10-fold CV RMSE ** | **10-fold CV MAE** |
+|           Feature set           | **10-fold CV RMSE** | **10-fold CV MAE** |
 |:-------------------------------:|:--------------------:|:------------------:|
 |        Morgan Fingerprint       |         2.052        |       0.9998       |
 |       RDKit's descriptors       |        1.0809        |       0.6223       |
