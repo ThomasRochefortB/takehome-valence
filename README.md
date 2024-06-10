@@ -5,7 +5,7 @@ https://github.com/ThomasRochefortB/takehome-valence/assets/47933584/15d23556-68
 I wanted to show what I could do, so I went overboard with the project. I implemented a few extra features that I thought would be useful:
 - I thought it was boring to retrieve from a static pdf file... so I integrated the PubMed API to chat with any OpenAccess article.
 - The Assistant supports message history.
-- I integrated SAFE-GPT as a tool for de novo molecule generation.
+- I integrated SAFE-GPT as a tool for de novo molecule generation. (ONLY WORKS ON NVIDIA GPUs, cant get it to work on Apple Silicon for some reason...)
 - The LangChain agent is deployed as a chat interface using chainlit.
 
 
