@@ -29,7 +29,7 @@ conda env create -f environment.yaml
 conda activate takehome_valence
 ```
 
-Setup your API keys in a .env file in the root directory of the project. 
+Setup your API keys in a `.env` file in the root directory of the project. 
 ```bash
 COHERE_API_KEY=your_api_key
 PINECONE_API_KEY=your_api_key
@@ -43,6 +43,7 @@ You can go through the steps of the takehome via the working_notebook.ipybn file
 chainlit run app.py
 ```
 
+-> To go through the minimal requirements of the assignment, you can run the cells in the `working_notebook.ipynb`
 
 ## Hydration free energy prediction model:
 * I managed to reach a 10-fold MAE that beats SOTA results from my very short lit. review and that is also under the experimental uncertainty of the freesolv dataset (+/-0.5674 kcal/mol)
@@ -53,8 +54,14 @@ chainlit run app.py
 
 [Machine Learning Prediction of Hydration Free Energy with Physically Inspired Descriptors](https://pubs.acs.org/doi/10.1021/acs.jpclett.2c03858?goto=supporting-info) -> RMSE: 0.8 , MAE: 0.5kcal/mol
 
+### a) Training and evaluating:
+To run training with 10-fold CV on the freesolv dataset just run:
+```bash
+python takehome/train_model.py
+```
+The script will output the evaluation metrics in the `log_metrics.txt`, and the saved scaler and model in `.saved_models`
 
-### Process:
+### b) Research process:
 1. I started with simple LGBM model (with default hyperparameters) to test different feature sets. 
 <center>
 
