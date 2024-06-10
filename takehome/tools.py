@@ -3,9 +3,14 @@ from langchain_core.tools import tool
 from langchain_cohere import CohereEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from langchain_community.document_loaders import PyPDFLoader
-from takehome.utils import simplify_string, find_article_pubmed, get_article_pdf, smiles_to_feature_vector
+from takehome.utils import (
+    simplify_string,
+    find_article_pubmed,
+    get_article_pdf,
+    smiles_to_feature_vector,
+)
 import requests
-from pinecone import Pinecone,ServerlessSpec
+from pinecone import Pinecone, ServerlessSpec
 import safe as sf
 from pickle import load
 from takehome.train_model import get_config
@@ -13,6 +18,7 @@ import time
 from safe.tokenizer import SAFETokenizer
 from safe.trainer.model import SAFEDoubleHeadsModel
 import torch
+
 
 @tool
 def query_vector_db_articles(query: str, metadata: dict) -> list:
@@ -47,13 +53,10 @@ def query_vector_db_articles(query: str, metadata: dict) -> list:
         pc.create_index(
             name=index_name,
             dimension=1024,
-            metric='cosine',
-            spec=ServerlessSpec(
-            cloud="aws",
-            region="us-east-1"
-            )
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
         )
-    
+
     vectorstore = PineconeVectorStore(index_name="pubmed", embedding=embeddings_model)
 
     original_title = metadata["title"]
@@ -70,7 +73,7 @@ def query_vector_db_articles(query: str, metadata: dict) -> list:
             pages = loader.load_and_split()
             for page in pages:
                 page.metadata.update({"title": simplify_string(article.title)})
-            
+
             vectorstore.from_documents(
                 pages, embedding=embeddings_model, index_name="pubmed"
             )
@@ -121,17 +124,18 @@ def get_smiles_from_pubchem(name: str) -> str:
     # Search PubChem for the compound by name
     search_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{name}/property/CanonicalSMILES/JSON"
     response = requests.get(search_url)
-    
+
     if response.status_code == 200:
         data = response.json()
-        if 'PropertyTable' in data and 'Properties' in data['PropertyTable']:
-            properties = data['PropertyTable']['Properties']
+        if "PropertyTable" in data and "Properties" in data["PropertyTable"]:
+            properties = data["PropertyTable"]["Properties"]
             if properties:
-                return properties[0]['CanonicalSMILES']
+                return properties[0]["CanonicalSMILES"]
     else:
         print(f"Error: {response.status_code} - {response.text}")
-    
+
     return None
+
 
 @tool
 def predict_energy_from_smiles(smiles: str) -> float:
@@ -170,8 +174,9 @@ def predict_energy_from_smiles(smiles: str) -> float:
 
     return prediction
 
+
 @tool
-def gen_denovo_molecules(n_desired_molecules:int=1)-> list[str]:
+def gen_denovo_molecules(n_desired_molecules: int = 1) -> list[str]:
     """
     Generate de novo molecules using SAFEDesign.
 
@@ -182,12 +187,16 @@ def gen_denovo_molecules(n_desired_molecules:int=1)-> list[str]:
     - list[str]: A list of generated SMILES strings representing the molecules.
     """
     if torch.cuda.is_available():
-        model = SAFEDoubleHeadsModel.from_pretrained("datamol-io/safe-gpt",low_cpu_mem_usage=True,device_map="cpu")
+        model = SAFEDoubleHeadsModel.from_pretrained(
+            "datamol-io/safe-gpt", low_cpu_mem_usage=True, device_map="cpu"
+        )
         tokenizer = SAFETokenizer.from_pretrained("datamol-io/safe-gpt")
         designer = sf.SAFEDesign(model=model, tokenizer=tokenizer)
 
-        n_trials=n_desired_molecules*2
-        generated_smiles = designer.de_novo_generation(sanitize=True, n_samples_per_trial=n_trials)
+        n_trials = n_desired_molecules * 2
+        generated_smiles = designer.de_novo_generation(
+            sanitize=True, n_samples_per_trial=n_trials
+        )
         return generated_smiles[:n_desired_molecules]
     else:
         print("CUDA not available, tool is not supported on the device.")

@@ -10,6 +10,7 @@ from padelpy import from_smiles
 from takehome.train_model import generate_smiles_embedding
 import pandas as pd
 
+
 def find_article_pubmed(title: str):
     """
     Find an article on PubMed based on the given title.
@@ -117,21 +118,24 @@ def simplify_string(text: str) -> str:
 
     return text
 
+
 # Function to convert SMILES to feature vector
 def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
     feature_list = []
     mol = Chem.MolFromSmiles(smiles)
     # Convert SMILES to Morgan fingerprint
-    if config['use_morgan']:
+    if config["use_morgan"]:
         if mol is not None:
-            fingerprint = Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=3, nBits=2048)
+            fingerprint = Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(
+                mol, radius=3, nBits=2048
+            )
             fingerprint_array = np.array(fingerprint)
         else:
             fingerprint_array = np.zeros(2048)
         feature_list.append(fingerprint_array)
 
     # Collect RDKit descriptors if required
-    if config['use_descriptors']:
+    if config["use_descriptors"]:
         descriptor_names = [name for name, _ in Descriptors.descList]
         if mol is not None:
             descriptors = [getattr(Descriptors, name)(mol) for name in descriptor_names]
@@ -141,16 +145,21 @@ def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
         feature_list.append(descriptors_array)
 
     # Collect PaDEL descriptors if required
-    if config['use_padel']:
+    if config["use_padel"]:
         if mol is not None:
             padel_descriptors = from_smiles(smiles, threads=-1)
-            padel_descriptors_array = pd.Series(padel_descriptors).apply(pd.to_numeric, errors='coerce').fillna(0).values
+            padel_descriptors_array = (
+                pd.Series(padel_descriptors)
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0)
+                .values
+            )
         else:
             padel_descriptors_array = np.zeros(len(padel_descriptors))
         feature_list.append(padel_descriptors_array)
 
     # Generate Hugging Face embeddings if required
-    if config['use_hf_embeddings']:
+    if config["use_hf_embeddings"]:
         hf_embedding = generate_smiles_embedding(smiles)
         feature_list.append(hf_embedding)
 
@@ -158,16 +167,14 @@ def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
     if feature_list:
         feature_vector = np.concatenate(feature_list)
     else:
-        raise ValueError("No features selected. Please include at least one type of feature.")
-
-    
+        raise ValueError(
+            "No features selected. Please include at least one type of feature."
+        )
 
     # Apply feature selection if indices are provided
     if feature_indices is not None:
         feature_vector = feature_vector[feature_indices]
-        
+
     # Scale the feature vector
     feature_vector = scaler.transform([feature_vector])[0]
     return feature_vector
-
-
