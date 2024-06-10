@@ -46,16 +46,23 @@ def find_article_pubmed(title: str):
 
 
 def get_article_pdf(article):
+    """
+    Retrieves the PDF of an article using the Unpaywall API.
+
+    Args:
+        article: An object representing the article.
+
+    Returns:
+        The file path of the downloaded PDF.
+
+    Raises:
+        None.
+    """
+
     # Your email for the API request
     email = "thomas.rochefort.beaudoin@gmail.com"
-
-    # The DOI of the article
     doi = article.doi.split("\n")[0]
-
-    # Unpaywall API URL
     unpaywall_url = f"https://api.unpaywall.org/v2/{doi}?email={email}"
-
-    # Send a GET request to Unpaywall API
     response = requests.get(unpaywall_url)
 
     # Check if the request was successful
@@ -121,6 +128,22 @@ def simplify_string(text: str) -> str:
 
 # Function to convert SMILES to feature vector
 def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
+    """
+    Convert a SMILES string to a feature vector based on the given configuration.
+
+    Args:
+        smiles (str): The SMILES string to convert.
+        config (dict): A dictionary containing the configuration options.
+        scaler (object): An object used to scale the feature vector.
+        feature_indices (list, optional): A list of indices to select specific features from the feature vector.
+
+    Returns:
+        numpy.ndarray: The feature vector representing the SMILES string.
+
+    Raises:
+        ValueError: If no features are selected.
+
+    """
     feature_list = []
     mol = Chem.MolFromSmiles(smiles)
     # Convert SMILES to Morgan fingerprint
