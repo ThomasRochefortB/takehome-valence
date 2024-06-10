@@ -1,6 +1,7 @@
 # takehome-valence
 I wanted to show what I could do, so I went overboard with the project. I implemented a few extra features that I thought would be useful:
 - I thought it was boring to retrieve from a static pdf file... so I integrated the PubMed API to chat with any OpenAccess article.
+- I integrated SAFE-GPT as a tool for de novo molecule generation.
 - The LangChain agent is deployed as a chat interface using chainlit.
 
 
@@ -13,7 +14,7 @@ Other than that, the project uses:
 - Cohere Command-R-Plus as the agent
 - Pinecone as the vectorstore and similarity search engine
 - The Pubchem database for SMILES information
-- A stacking ensemble model to predict the hydration free energy
+- A stacking ensemble model with SOTA performance to predict the hydration free energy
 
 
 ## Installation
