@@ -22,4 +22,8 @@ dependencies:
     - scikit-learn
     - pymed
     - pypdf
+    - python-Levenshtein
+    - torch
+    - transformers
+    - padelpy
     

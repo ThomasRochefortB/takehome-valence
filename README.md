@@ -37,3 +37,14 @@ You can go through the steps of the takehome via the working_notebook.ipybn file
 ```bash
 chainlit run app.py
 ```
+
+
+## Hydration free energy prediction model:
+
+| Model    | 10-fold CV Mean RMSE  across folds | 10-fold CV Mean MAE across folds |   |
+|----------|------------------------------------|----------------------------------|---|
+| Ridge    |                                    |                                  |   |
+| RF       |                                    |                                  |   |
+| LGBM     |                                    |                                  |   |
+| Voting   |                                    |                                  |   |
+| Stacking |                                    |                                  |   |

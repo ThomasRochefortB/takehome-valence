@@ -6,7 +6,9 @@ import os
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 import numpy as np
-
+from padelpy import from_smiles
+from takehome.train_model import generate_smiles_embedding
+import pandas as pd
 
 def find_article_pubmed(title: str):
     """
@@ -117,43 +119,56 @@ def simplify_string(text: str) -> str:
 
 # Function to convert SMILES to feature vector
 def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
-    # Convert SMILES to Morgan fingerprint
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is not None:
-        fingerprint = Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=3, nBits=2048)
-        fingerprint_array = np.array(fingerprint)
-    else:
-        fingerprint_array = np.zeros(2048)
+    feature_list = []
 
-    # Collect molecular descriptors if required
+    # Convert SMILES to Morgan fingerprint
+    if config['use_morgan']:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is not None:
+            fingerprint = Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=3, nBits=2048)
+            fingerprint_array = np.array(fingerprint)
+        else:
+            fingerprint_array = np.zeros(2048)
+        feature_list.append(fingerprint_array)
+
+    # Collect RDKit descriptors if required
     if config['use_descriptors']:
         descriptor_names = [name for name, _ in Descriptors.descList]
-        descriptors = {}
-        for name in descriptor_names:
-            if mol is not None:
-                descriptors[name] = getattr(Descriptors, name)(mol)
-            else:
-                descriptors[name] = 0  # Or you could choose another default value
-        descriptors_array = np.array([descriptors[name] for name in descriptor_names])
-    else:
-        descriptors_array = np.array([])
+        if mol is not None:
+            descriptors = [getattr(Descriptors, name)(mol) for name in descriptor_names]
+        else:
+            descriptors = [0] * len(descriptor_names)
+        descriptors_array = np.array(descriptors)
+        feature_list.append(descriptors_array)
 
-    # Combine fingerprints and descriptors if both are used
-    if config['use_morgan'] and config['use_descriptors']:
-        feature_vector = np.concatenate((fingerprint_array, descriptors_array))
-    elif config['use_morgan']:
-        feature_vector = fingerprint_array
-    elif config['use_descriptors']:
-        feature_vector = descriptors_array
-    else:
-        raise ValueError("No features selected. Please include at least Morgan fingerprints or descriptors.")
+    # Collect PaDEL descriptors if required
+    if config['use_padel']:
+        if mol is not None:
+            padel_descriptors = from_smiles(smiles, threads=-1)
+            padel_descriptors_array = pd.Series(padel_descriptors).apply(pd.to_numeric, errors='coerce').fillna(0).values
+        else:
+            padel_descriptors_array = np.zeros(len(padel_descriptors))
+        feature_list.append(padel_descriptors_array)
 
-    # Scale the feature vector
-    feature_vector = scaler.transform([feature_vector])[0]
+    # Generate Hugging Face embeddings if required
+    if config['use_hf_embeddings']:
+        hf_embedding = generate_smiles_embedding(smiles)
+        feature_list.append(hf_embedding)
+
+    # Combine all feature vectors
+    if feature_list:
+        feature_vector = np.concatenate(feature_list)
+    else:
+        raise ValueError("No features selected. Please include at least one type of feature.")
+
+    
 
     # Apply feature selection if indices are provided
     if feature_indices is not None:
         feature_vector = feature_vector[feature_indices]
-
+        
+    # Scale the feature vector
+        feature_vector = scaler.transform([feature_vector])[0]
     return feature_vector
+
 

@@ -8,47 +8,47 @@ from sklearn.metrics import make_scorer, mean_absolute_error
 from sklearn.model_selection import KFold, cross_validate
 from sklearn.ensemble import RandomForestRegressor, VotingRegressor, StackingRegressor
 from sklearn.svm import SVR
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.neural_network import MLPRegressor  # Import MLPRegressor
 import lightgbm as lgb
 from pickle import dump
 import os
+import torch
+from transformers import AutoModel
+from padelpy import from_smiles
+import requests
+from tqdm import tqdm  # Import tqdm for progress bar
 
+# Import and set up the SAFETokenizer
+from safe.tokenizer import SAFETokenizer
 
-def get_config():
+# Helper functions for downloading and setting up SAFETokenizer
+def download_file(url, output_path):
+    response = requests.get(url)
+    response.raise_for_status()
+    with open(output_path, 'wb') as f:
+        f.write(response.content)
 
-    # Configuration dictionary (without model definition)
-    config = {
-        'use_morgan': True,
-        'use_descriptors': True,
-        'scaler': MinMaxScaler(),
-        'use_feature_selection': False,
-        'num_top_features': 15,
-        'cv_folds': 10,
-        'random_state': 42,
-        'scoring': {
-            'rmse': make_scorer(lambda y_true, y_pred: np.sqrt(np.mean((y_true - y_pred) ** 2)), greater_is_better=False),
-            'mae': make_scorer(mean_absolute_error, greater_is_better=False)
-        },
-    }
+def check_and_download_tokenizer(tokenizer_path):
+    tokenizer_url = "https://huggingface.co/datamol-io/safe-gpt/resolve/main/tokenizer.json"
+    config_url = "https://huggingface.co/datamol-io/safe-gpt/resolve/main/config.json"
+    if not os.path.exists(tokenizer_path):
+        os.makedirs(os.path.dirname(tokenizer_path), exist_ok=True)
+        print(f"Downloading {tokenizer_url} to {tokenizer_path}...")
+        download_file(tokenizer_url, tokenizer_path)
+        print("Download complete.")
+    config_path = os.path.join(os.path.dirname(tokenizer_path), "config.json")
+    if not os.path.exists(config_path):
+        print(f"Downloading {config_url} to {config_path}...")
+        download_file(config_url, config_path)
+        print("Download complete.")
 
-    return config
+def setup_safe_tokenizer(tokenizer_path):
+    check_and_download_tokenizer(tokenizer_path)
+    tokenizer = SAFETokenizer().load(tokenizer_path)
+    tokenizer = tokenizer.get_pretrained()
+    return tokenizer
 
-config = get_config()
-
-# Base models for the ensemble
-base_models = [
-    ('rf', RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=10, random_state=42)),
-    ('lgbm', lgb.LGBMRegressor(n_estimators=100, max_depth=10, min_data_in_leaf=10, random_state=42, verbose=-1)),
-    ('svr', SVR(C=1.0, epsilon=0.1)),
-]
-
-# Option 1: Using Voting Regressor
-voting_ensemble_model = VotingRegressor(estimators=base_models)
-
-# Option 2: Using Stacking Regressor with Linear Regression as the meta-learner
-stacking_ensemble_model = StackingRegressor(estimators=base_models, final_estimator=LinearRegression())
-# Choose the model to use
-config['model'] = stacking_ensemble_model  # or stacking_ensemble_model
 
 # Convert SMILES to Fingerprints using RDKit
 def smiles_to_fingerprint(smiles):
@@ -59,39 +59,116 @@ def smiles_to_fingerprint(smiles):
     else:
         return np.zeros(2048)  # Return a zero vector if the molecule is invalid
 
-# Function to get dataset
+# Function to generate token embeddings from SMILES using Hugging Face model
+def generate_smiles_embedding(smiles):
+    # Load the SAFETokenizer
+    tokenizer_path = '/home/thomas/Documents/scratch_thomas/GitHub/takehome-valence/tokenizer.json'
+    safe_tokenizer = setup_safe_tokenizer(tokenizer_path)
+    hf_model = AutoModel.from_pretrained("datamol-io/safe-gpt")
+    hf_model.eval()
+    tokens = safe_tokenizer.encode(smiles)
+    tokens_tensor = torch.tensor([tokens])  # Convert to tensor and add batch dimension
+
+    with torch.no_grad():
+        outputs = hf_model(tokens_tensor)
+
+    last_hidden_state = outputs.last_hidden_state  # (batch_size, sequence_length, hidden_size)
+    embeddings = last_hidden_state.mean(dim=1).squeeze().numpy()  # (batch_size, hidden_size)
+    
+    return embeddings
+
+def get_config():
+    config = {
+        'use_morgan': True,
+        'use_descriptors': False,
+        'use_padel': False,
+        'use_hf_embeddings': False,
+        'hf_model_name': "datamol-io/safe-gpt",
+        'scaler': MinMaxScaler(),
+        'use_feature_selection': True,
+        'num_top_features': 100,
+        'cv_folds': 10,
+        'random_state': 42,
+        'scoring': {
+            'rmse': make_scorer(lambda y_true, y_pred: np.sqrt(np.mean((y_true - y_pred) ** 2)), greater_is_better=False),
+            'mae': make_scorer(mean_absolute_error, greater_is_better=False)
+        },
+    }
+    return config
+
+config = get_config()
+
+
+# Base models for the ensemble
+base_models = {
+    'rf': RandomForestRegressor(n_estimators=100, max_depth=10, min_samples_leaf=10, random_state=42,n_jobs=-1),
+    'lgbm': lgb.LGBMRegressor(n_estimators=100, max_depth=10, min_data_in_leaf=10, random_state=42, verbose=-1),
+    #'svr': SVR(C=1.0, epsilon=0.1),
+    #'mlp': MLPRegressor(hidden_layer_sizes=(256,256,256),alpha=0.01,early_stopping=True, max_iter=1000, random_state=42)  # Add MLPRegressor
+}
+
+# Option 1: Using Voting Regressor
+voting_ensemble_model = VotingRegressor(estimators=[(name, model) for name, model in base_models.items()])
+
+# Option 2: Using Stacking Regressor with Ridge Regression as the meta-learner
+stacking_ensemble_model = StackingRegressor(estimators=[(name, model) for name, model in base_models.items()], final_estimator=Ridge())
+
+# Helper functions to generate features
+def generate_morgan_features(df):
+    return df["smiles"].apply(smiles_to_fingerprint).tolist()
+
+def generate_rdkit_descriptors(df):
+    descriptor_names = [name for name, _ in Descriptors.descList]
+    descriptors_list = []
+    for smiles in df["smiles"]:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol:
+            descriptors = [getattr(Descriptors, name)(mol) for name in descriptor_names]
+        else:
+            descriptors = [None] * len(descriptor_names)
+        descriptors_list.append(descriptors)
+    return pd.DataFrame(descriptors_list).fillna(0).values
+
+def generate_padel_descriptors(df):
+    padel_descriptors_list = []
+    for smiles in tqdm(df["smiles"], desc="Generating PaDEL descriptors"):
+        padel_descriptors = from_smiles(smiles,threads=-1)
+        padel_descriptors_list.append(padel_descriptors)
+    return pd.DataFrame(padel_descriptors_list).apply(pd.to_numeric, errors='coerce').fillna(0).values
+
+def generate_hf_embeddings(df):
+    embeddings_list = [generate_smiles_embedding(smiles) for smiles in df["smiles"]]
+    return np.array(embeddings_list)
+
+# Simplified get_dataset function
 def get_dataset(config):
-    df = dm.data.freesolv()  # Replace this with the actual method to load your data
+    df = dm.data.freesolv()  # Replace with your data loading method
+    features = []
 
+    # Generate and collect features based on configuration
     if config['use_morgan']:
-        df["morgan"] = df["smiles"].apply(smiles_to_fingerprint)
-
+        morgan_features = generate_morgan_features(df)
+        features.append(morgan_features)
+    
     if config['use_descriptors']:
-        descriptor_names = [name for name, _ in Descriptors.descList]
-        descriptors_list = []
-        for smiles in df["smiles"]:
-            mol = Chem.MolFromSmiles(smiles)
-            if mol:
-                descriptors = {name: getattr(Descriptors, name)(mol) for name in descriptor_names}
-            else:
-                descriptors = {name: None for name in descriptor_names}
-            descriptors_list.append(descriptors)
-        descriptors_df = pd.DataFrame(descriptors_list)
-        df = pd.concat([df, descriptors_df], axis=1)
+        rdkit_descriptors = generate_rdkit_descriptors(df)
+        features.append(rdkit_descriptors)
+    
+    if config['use_padel']:
+        padel_descriptors = generate_padel_descriptors(df)
+        features.append(padel_descriptors)
+    
+    if config['use_hf_embeddings']:
+        hf_embeddings = generate_hf_embeddings(df)
+        features.append(hf_embeddings)
 
-    if config['use_morgan'] and config['use_descriptors']:
-        X = df.apply(lambda row: np.concatenate([row["morgan"], row[descriptor_names].values]), axis=1)
-    elif config['use_morgan']:
-        X = df["morgan"].apply(pd.Series)
-    elif config['use_descriptors']:
-        X = df[descriptor_names].values
-    else:
-        raise ValueError("No features selected. Please include at least Morgan fingerprints or descriptors.")
+    # Concatenate all features along the feature axis
+    X = np.hstack(features) if features else np.array([])
 
-    y = df["expt"]
+    y = df["expt"].values
 
-    X = np.array(list(X))
-    y = np.array(y)
+    # Print the shape of the dataset
+    print(f"Dataset shape: X = {X.shape}, y = {y.shape}")
 
     return X, y
 
@@ -103,58 +180,92 @@ def select_features(X, y, num_top_features, random_state):
     top_feature_indices = np.argsort(feature_importances)[-num_top_features:]
     return X[:, top_feature_indices], top_feature_indices
 
-# Training and evaluation function for the ensemble model
-def train_and_evaluate_model(X, y, config):
+# Function to train and evaluate a model and log the results
+def train_and_evaluate_model(X, y, config, model, model_name, log_file):
+    log_file.write(f"\nTesting {model_name}:\n")
+    log_file.write("-" * 30 + "\n")
+    print(f"Training and evaluating {model_name}...")
+
     feature_indices = None
     if config['use_feature_selection']:
         X, feature_indices = select_features(X, y, config['num_top_features'], config['random_state'])
-        print(f"Selected Feature Indices: {feature_indices}")
+        log_file.write(f"Selected Feature Indices: {feature_indices}\n")
 
     X = config['scaler'].fit_transform(X)
-
     kf = KFold(n_splits=config['cv_folds'], shuffle=True, random_state=config['random_state'])
-
-    model = config['model']
 
     cv_results = cross_validate(model, X, y, cv=kf, scoring=config['scoring'], return_train_score=True)
 
     rmse_scores = -cv_results['test_rmse']
     mae_scores = -cv_results['test_mae']
-
-    print("K-Fold Cross-Validation Results for Ensemble Model:")
-    print(f"Root Mean Squared Error (RMSE) across folds: {rmse_scores}")
-    print(f"Mean RMSE: {rmse_scores.mean()}, Standard Deviation: {rmse_scores.std()}")
-    print(f"Mean Absolute Error (MAE) across folds: {mae_scores}")
-    print(f"Mean MAE: {mae_scores.mean()}, Standard Deviation: {mae_scores.std()}")
-
     train_rmse_scores = -cv_results['train_rmse']
     train_mae_scores = -cv_results['train_mae']
 
-    print("Training Scores (for reference):")
-    print(f"Training Root Mean Squared Error (RMSE) across folds: {train_rmse_scores}")
-    print(f"Mean Training RMSE: {train_rmse_scores.mean()}, Standard Deviation: {train_rmse_scores.std()}")
-    print(f"Training Mean Absolute Error (MAE) across folds: {train_mae_scores}")
-    print(f"Mean Training MAE: {train_mae_scores.mean()}, Standard Deviation: {train_mae_scores.std()}")
-
-    # Fit the ensemble model on the entire dataset
-    model.fit(X, y)
+    log_file.write("K-Fold Cross-Validation Results:\n")
+    log_file.write(f"Root Mean Squared Error (RMSE) across folds: {rmse_scores}\n")
+    log_file.write(f"Mean RMSE: {rmse_scores.mean()}, Standard Deviation: {rmse_scores.std()}\n")
+    log_file.write(f"Mean Absolute Error (MAE) across folds: {mae_scores}\n")
+    log_file.write(f"Mean MAE: {mae_scores.mean()}, Standard Deviation: {mae_scores.std()}\n")
     
-    # Create the folder if it does not exist
+    log_file.write("\nTraining Scores (for reference):\n")
+    log_file.write(f"Training Root Mean Squared Error (RMSE) across folds: {train_rmse_scores}\n")
+    log_file.write(f"Mean Training RMSE: {train_rmse_scores.mean()}, Standard Deviation: {train_rmse_scores.std()}\n")
+    log_file.write(f"Training Mean Absolute Error (MAE) across folds: {train_mae_scores}\n")
+    log_file.write(f"Mean Training MAE: {train_mae_scores.mean()}, Standard Deviation: {train_mae_scores.std()}\n")
+
+    # Fit the model on the entire dataset
+    model.fit(X, y)
+
+    return model, rmse_scores.mean(), feature_indices
+
+if __name__ == "__main__":
+    X, y = get_dataset(config)
+    best_model = None
+    best_rmse = float('inf')
+    best_model_name = ""
+
+    with open("log_metrics.txt", "w") as log_file:
+        # Test each base model individually
+        for model_name, model in base_models.items():
+            trained_model, mean_rmse, feature_indices = train_and_evaluate_model(X, y, config, model, model_name, log_file)
+            if mean_rmse < best_rmse:
+                best_rmse = mean_rmse
+                best_model = trained_model
+                best_model_name = model_name
+                best_feature_indices = feature_indices
+
+        # Test Voting Regressor
+        trained_model, mean_rmse, feature_indices = train_and_evaluate_model(X, y, config, voting_ensemble_model, "Voting Regressor", log_file)
+        if mean_rmse < best_rmse:
+            best_rmse = mean_rmse
+            best_model = trained_model
+            best_model_name = "Voting Regressor"
+            best_feature_indices = feature_indices
+
+        # Test Stacking Regressor
+        trained_model, mean_rmse, feature_indices = train_and_evaluate_model(X, y, config, stacking_ensemble_model, "Stacking Regressor", log_file)
+        if mean_rmse < best_rmse:
+            best_rmse = mean_rmse
+            best_model = trained_model
+            best_model_name = "Stacking Regressor"
+            best_feature_indices = feature_indices
+
+        log_file.write("\nBest Model Summary:\n")
+        log_file.write(f"Best Model: {best_model_name}\n")
+        log_file.write(f"Best RMSE: {best_rmse}\n")
+
+    print(f"Best model is {best_model_name} with RMSE {best_rmse}")
+
+    # Save the best model, scaler, and feature_indices if used
     folder_path = ".saved_models"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    # Save the trained model, scaler, and feature_indices
     with open(os.path.join(folder_path, "final_model.pkl"), "wb") as f:
-        dump(model, f, protocol=5)
+        dump(best_model, f, protocol=5)
     with open(os.path.join(folder_path, "scaler.pkl"), "wb") as f:
         dump(config['scaler'], f, protocol=5)
-    if feature_indices is not None:
+
+    if config['use_feature_selection']:
         with open(os.path.join(folder_path, "feature_indices.pkl"), "wb") as f:
-            dump(feature_indices, f, protocol=5)
-
-    return model
-
-if __name__ == "__main__":
-    X, y = get_dataset(config)
-    final_model = train_and_evaluate_model(X, y, config)
+            dump(best_feature_indices, f, protocol=5)
