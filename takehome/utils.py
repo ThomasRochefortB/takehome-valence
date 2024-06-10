@@ -120,10 +120,9 @@ def simplify_string(text: str) -> str:
 # Function to convert SMILES to feature vector
 def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
     feature_list = []
-
+    mol = Chem.MolFromSmiles(smiles)
     # Convert SMILES to Morgan fingerprint
     if config['use_morgan']:
-        mol = Chem.MolFromSmiles(smiles)
         if mol is not None:
             fingerprint = Chem.rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=3, nBits=2048)
             fingerprint_array = np.array(fingerprint)
@@ -168,7 +167,7 @@ def smiles_to_feature_vector(smiles, config, scaler, feature_indices=None):
         feature_vector = feature_vector[feature_indices]
         
     # Scale the feature vector
-        feature_vector = scaler.transform([feature_vector])[0]
+    feature_vector = scaler.transform([feature_vector])[0]
     return feature_vector
 
 

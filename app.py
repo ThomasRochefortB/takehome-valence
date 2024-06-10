@@ -5,8 +5,7 @@ from langchain.agents import AgentExecutor
 from langchain_cohere.react_multi_hop.agent import create_cohere_react_agent
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.memory import ChatMessageHistory
-from takehome.tools import query_vector_db_articles, get_smiles_from_pubchem, predict_energy_from_smiles
-
+from takehome.tools import query_vector_db_articles, get_smiles_from_pubchem, predict_energy_from_smiles, gen_denovo_molecules
 import chainlit as cl
 
 @cl.set_starters
@@ -29,6 +28,12 @@ async def set_starters():
             icon="/public/lightning.svg",
             ),
 
+        cl.Starter(
+            label="Generate 10 novel molecules",
+            message="Can you generate 10 novel molecules? ",
+            icon="/public/flask.svg",
+            ),
+
         ]
 
 @cl.on_chat_start
@@ -40,18 +45,19 @@ async def on_chat_start():
     You must answer in a precise and concise manner.
     You are equipped with a vectordatabase about scientific articles,
     a tool to get the SMILES string of a given molecule name,
+    a tool to generate denovo molecules and return their SMILES string,
     and a tool to predict the energy of a molecule from its SMILES string.
     """
 
     # Create the ReAct agent
     agent = create_cohere_react_agent(
     llm=model,
-    tools=[query_vector_db_articles,get_smiles_from_pubchem, predict_energy_from_smiles],
+    tools=[query_vector_db_articles,get_smiles_from_pubchem, predict_energy_from_smiles,gen_denovo_molecules],
     prompt=prompt,
     )
 
     agent_executor = AgentExecutor(agent=agent,
-                                tools=[query_vector_db_articles,get_smiles_from_pubchem, predict_energy_from_smiles],
+                                tools=[query_vector_db_articles,get_smiles_from_pubchem, predict_energy_from_smiles,gen_denovo_molecules],
                                 verbose=True,
                                 handle_parsing_errors=True,)
     

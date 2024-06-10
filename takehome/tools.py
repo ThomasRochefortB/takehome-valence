@@ -6,6 +6,7 @@ from langchain_community.document_loaders import PyPDFLoader
 from takehome.utils import simplify_string, find_article_pubmed, get_article_pdf, smiles_to_feature_vector
 import requests
 from pinecone import Pinecone,ServerlessSpec
+import safe as sf
 
 from pickle import load
 from takehome.train_model import get_config
@@ -166,3 +167,19 @@ def predict_energy_from_smiles(smiles: str) -> float:
     print(f"Prediction for {smiles}: {prediction}")
 
     return prediction
+
+@tool
+def gen_denovo_molecules(n_desired_molecules:int=10)-> list[str]:
+    """
+    Generate de novo molecules using SAFEDesign.
+
+    Parameters:
+    - n_desired_molecules (int): The number of desired molecules to generate. Default is 10.
+
+    Returns:
+    - list[str]: A list of generated SMILES strings representing the molecules.
+    """
+    n_trials=n_desired_molecules*2
+    designer = sf.SAFEDesign.load_default(verbose=True)
+    generated_smiles = designer.de_novo_generation(sanitize=True, n_samples_per_trial=n_trials)
+    return generated_smiles[:n_desired_molecules]
